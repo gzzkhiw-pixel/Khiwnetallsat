@@ -1,0 +1,158 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local plr = Players.LocalPlayer
+local mouse = plr:GetMouse()
+
+-- =====================
+-- 🔧 MACRO SYSTEM
+-- =====================
+local Macro = {
+    Saved = {},
+    Recording = {},
+    IsRecording = false,
+    StartTime = 0
+}
+
+function Macro:Start()
+    self.Recording = {}
+    self.IsRecording = true
+    self.StartTime = tick()
+    print("🎥 Recording...")
+end
+
+function Macro:Stop(name)
+    self.IsRecording = false
+    self.Saved[name] = self.Recording
+    print("💾 Saved:", name)
+end
+
+function Macro:Record(action, data)
+    if not self.IsRecording then return end
+
+    table.insert(self.Recording, {
+        action = action,
+        time = tick() - self.StartTime,
+        data = data
+    })
+end
+
+function Macro:Play(name)
+    local macro = self.Saved[name]
+    if not macro then return warn("No macro") end
+
+    print("▶️ Playing:", name)
+
+    for i, step in ipairs(macro) do
+        local delay = step.time - (macro[i-1] and macro[i-1].time or 0)
+        task.wait(delay)
+
+        if step.action == "Click" then
+            print("Click at:", step.data.pos)
+
+            -- 🔥 ใส่ระบบวางยูนิตของคุณตรงนี้
+            -- เช่น RemoteEvent:FireServer(step.data.pos)
+        end
+    end
+end
+
+-- =====================
+-- 🖱️ RECORD CLICK
+-- =====================
+mouse.Button1Down:Connect(function()
+    local pos = mouse.Hit.Position
+
+    Macro:Record("Click", {
+        pos = pos
+    })
+end)
+
+-- =====================
+-- 🖥️ UI SYSTEM (ธีมดำ)
+-- =====================
+local gui = Instance.new("ScreenGui", plr.PlayerGui)
+gui.Name = "MacroUI"
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 250, 0, 220)
+frame.Position = UDim2.new(0, 20, 0, 100)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+frame.Active = true
+frame.Draggable = true
+
+local function makeBtn(text, y)
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(1, -20, 0, 30)
+    btn.Position = UDim2.new(0, 10, 0, y)
+    btn.Text = text
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    btn.TextColor3 = Color3.new(1,1,1)
+    return btn
+end
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,30)
+title.Text = "MACRO SYSTEM"
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.new(1,1,1)
+
+local nameBox = Instance.new("TextBox", frame)
+nameBox.Size = UDim2.new(1,-20,0,30)
+nameBox.Position = UDim2.new(0,10,0,40)
+nameBox.PlaceholderText = "Macro Name"
+nameBox.Text = ""
+nameBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+nameBox.TextColor3 = Color3.new(1,1,1)
+
+local startBtn = makeBtn("Start Record", 80)
+local stopBtn = makeBtn("Stop & Save", 120)
+local playBtn = makeBtn("Play", 160)
+
+-- =====================
+-- 📂 SIMPLE DROPDOWN
+-- =====================
+local selected = nil
+
+local dropdown = Instance.new("TextButton", frame)
+dropdown.Size = UDim2.new(1,-20,0,30)
+dropdown.Position = UDim2.new(0,10,0,200)
+dropdown.Text = "Select Macro"
+dropdown.BackgroundColor3 = Color3.fromRGB(40,40,40)
+dropdown.TextColor3 = Color3.new(1,1,1)
+
+dropdown.MouseButton1Click:Connect(function()
+    for name,_ in pairs(Macro.Saved) do
+        selected = name
+        dropdown.Text = name
+        break
+    end
+end)
+
+-- =====================
+-- 🎮 BUTTON LOGIC
+-- =====================
+startBtn.MouseButton1Click:Connect(function()
+    Macro:Start()
+end)
+
+stopBtn.MouseButton1Click:Connect(function()
+    local name = nameBox.Text ~= "" and nameBox.Text or "Macro1"
+    Macro:Stop(name)
+end)
+
+playBtn.MouseButton1Click:Connect(function()
+    if selected then
+        Macro:Play(selected)
+    else
+        warn("No macro selected")
+    end
+end)
+
+-- =====================
+-- 🔥 TOGGLE UI (ปุ่มเปิด/ปิด)
+-- =====================
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        frame.Visible = not frame.Visible
+    end
+end)
