@@ -1,0 +1,204 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local VIM = game:GetService("VirtualInputManager")
+
+local plr = Players.LocalPlayer
+
+-- =====================
+-- 🔧 MACRO SYSTEM
+-- =====================
+local Macro = {
+    Saved = {},
+    Recording = {},
+    IsRecording = false,
+    StartTime = 0
+}
+
+function Macro:Start()
+    self.Recording = {}
+    self.IsRecording = true
+    self.StartTime = tick()
+end
+
+function Macro:Stop(name)
+    self.IsRecording = false
+    self.Saved[name] = self.Recording
+end
+
+function Macro:Record(pos)
+    if not self.IsRecording then return end
+    table.insert(self.Recording, {
+        time = tick() - self.StartTime,
+        pos = pos
+    })
+end
+
+function Macro:Play(name, status)
+    local data = self.Saved[name]
+    if not data or #data == 0 then
+        status.Text = "❌ ไม่มีข้อมูลมาโคร"
+        return
+    end
+
+    status.Text = "▶️ กำลังเล่น..."
+
+    for i, v in ipairs(data) do
+        local delay = v.time - (data[i-1] and data[i-1].time or 0)
+        task.wait(delay)
+
+        VIM:SendMouseButtonEvent(v.pos.X, v.pos.Y, 0, true, game, 0)
+        VIM:SendMouseButtonEvent(v.pos.X, v.pos.Y, 0, false, game, 0)
+    end
+
+    status.Text = "✅ เล่นเสร็จแล้ว"
+end
+
+-- =====================
+-- 📱 บันทึกคลิก (รองรับมือถือ)
+-- =====================
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+
+    if input.UserInputType == Enum.UserInputType.Touch then
+        Macro:Record(input.Position)
+    elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Macro:Record(UIS:GetMouseLocation())
+    end
+end)
+
+-- =====================
+-- 🖥️ UI
+-- =====================
+local gui = Instance.new("ScreenGui", plr.PlayerGui)
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 300, 0, 280)
+frame.Position = UDim2.new(0.5, -150, 0.7, -140)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+frame.Active = true
+
+-- =====================
+-- 🧲 TOP BAR (ลากได้)
+-- =====================
+local topBar = Instance.new("Frame", frame)
+topBar.Size = UDim2.new(1,0,0,40)
+topBar.BackgroundColor3 = Color3.fromRGB(30,30,30)
+
+local title = Instance.new("TextLabel", topBar)
+title.Size = UDim2.new(1,0,1,0)
+title.BackgroundTransparency = 1
+title.Text = "📦 Macro System"
+title.TextColor3 = Color3.new(1,1,1)
+
+-- ระบบลาก
+local dragging = false
+local dragStart, startPos
+
+topBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch 
+    or input.UserInputType == Enum.UserInputType.MouseButton1 then
+
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+topBar.InputChanged:Connect(function(input)
+    if dragging and (
+        input.UserInputType == Enum.UserInputType.Touch 
+        or input.UserInputType == Enum.UserInputType.MouseMovement
+    ) then
+
+        local delta = input.Position - dragStart
+
+        frame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- =====================
+-- 🔔 STATUS
+-- =====================
+local status = Instance.new("TextLabel", frame)
+status.Size = UDim2.new(1,0,0,35)
+status.Position = UDim2.new(0,0,0,40)
+status.BackgroundColor3 = Color3.fromRGB(25,25,25)
+status.TextColor3 = Color3.new(1,1,1)
+status.Text = "สถานะ: พร้อมใช้งาน"
+
+-- =====================
+-- 📝 TEXTBOX
+-- =====================
+local nameBox = Instance.new("TextBox", frame)
+nameBox.Size = UDim2.new(1,-20,0,35)
+nameBox.Position = UDim2.new(0,10,0,80)
+nameBox.PlaceholderText = "ตั้งชื่อมาโคร"
+nameBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+nameBox.TextColor3 = Color3.new(1,1,1)
+
+-- =====================
+-- 🔘 BUTTON
+-- =====================
+local function btn(text, y)
+    local b = Instance.new("TextButton", frame)
+    b.Size = UDim2.new(1,-20,0,35)
+    b.Position = UDim2.new(0,10,0,y)
+    b.Text = text
+    b.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    b.TextColor3 = Color3.new(1,1,1)
+    return b
+end
+
+local start = btn("🎥 เริ่มบันทึก", 120)
+local stop = btn("💾 หยุด & บันทึก", 160)
+local play = btn("▶️ เล่นมาโคร", 200)
+
+local selected = nil
+
+-- =====================
+-- 🎮 LOGIC
+-- =====================
+start.MouseButton1Click:Connect(function()
+    Macro:Start()
+    status.Text = "🎥 กำลังบันทึก..."
+end)
+
+stop.MouseButton1Click:Connect(function()
+    local name = nameBox.Text ~= "" and nameBox.Text or "macro1"
+    Macro:Stop(name)
+    selected = name
+    status.Text = "✅ บันทึกสำเร็จ: "..name.." ("..#Macro.Recording.." จุด)"
+end)
+
+play.MouseButton1Click:Connect(function()
+    if not selected then
+        status.Text = "❌ ยังไม่มีมาโคร"
+        return
+    end
+    Macro:Play(selected, status)
+end)
+
+-- =====================
+-- 📱 TOGGLE UI
+-- =====================
+local toggle = Instance.new("TextButton", gui)
+toggle.Size = UDim2.new(0,120,0,45)
+toggle.Position = UDim2.new(0,20,0.8,0)
+toggle.Text = "เปิด/ปิด"
+toggle.BackgroundColor3 = Color3.fromRGB(0,0,0)
+toggle.TextColor3 = Color3.new(1,1,1)
+
+toggle.MouseButton1Click:Connect(function()
+    frame.Visible = not frame.Visible
+end)
