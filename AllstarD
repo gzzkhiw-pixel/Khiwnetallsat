@@ -1,0 +1,183 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local VIM = game:GetService("VirtualInputManager")
+
+local plr = Players.LocalPlayer
+local mouse = plr:GetMouse()
+
+-- =====================
+-- 🔧 MACRO SYSTEM
+-- =====================
+local Macro = {
+    Saved = {},
+    Recording = {},
+    IsRecording = false,
+    StartTime = 0
+}
+
+function Macro:Start()
+    self.Recording = {}
+    self.IsRecording = true
+    self.StartTime = tick()
+    print("🎥 เริ่มอัด")
+end
+
+function Macro:Stop(name)
+    self.IsRecording = false
+    self.Saved[name] = self.Recording
+    print("💾 บันทึก:", name)
+end
+
+function Macro:Record(action, data)
+    if not self.IsRecording then return end
+
+    table.insert(self.Recording, {
+        action = action,
+        time = tick() - self.StartTime,
+        data = data
+    })
+end
+
+function Macro:Play(name)
+    local macro = self.Saved[name]
+    if not macro then return warn("❌ ไม่มีมาโคร") end
+
+    print("▶️ เล่น:", name)
+
+    for i, step in ipairs(macro) do
+        local delay = step.time - (macro[i-1] and macro[i-1].time or 0)
+        task.wait(delay)
+
+        if step.action == "Click" then
+            local pos = step.data.screenPos
+
+            VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+            VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+        end
+    end
+end
+
+-- =====================
+-- 🖱️ RECORD CLICK (แม่น)
+-- =====================
+mouse.Button1Down:Connect(function()
+    local pos = UIS:GetMouseLocation()
+
+    Macro:Record("Click", {
+        screenPos = pos
+    })
+end)
+
+-- =====================
+-- 🖥️ UI
+-- =====================
+local gui = Instance.new("ScreenGui", plr.PlayerGui)
+gui.Name = "MacroUI"
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 260, 0, 320)
+frame.Position = UDim2.new(0, 20, 0, 120)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+frame.Active = true
+frame.Draggable = true
+
+local function makeBtn(text, y)
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(1, -20, 0, 35)
+    btn.Position = UDim2.new(0, 10, 0, y)
+    btn.Text = text
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    btn.TextColor3 = Color3.new(1,1,1)
+    return btn
+end
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,35)
+title.Text = "ระบบมาโคร"
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.new(1,1,1)
+
+local nameBox = Instance.new("TextBox", frame)
+nameBox.Size = UDim2.new(1,-20,0,35)
+nameBox.Position = UDim2.new(0,10,0,45)
+nameBox.PlaceholderText = "ตั้งชื่อมาโคร"
+nameBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+nameBox.TextColor3 = Color3.new(1,1,1)
+
+local startBtn = makeBtn("เริ่มบันทึก", 90)
+local stopBtn = makeBtn("หยุด & บันทึก", 130)
+local playBtn = makeBtn("เล่นมาโคร", 170)
+
+-- dropdown
+local selected = nil
+local dropdown = makeBtn("เลือกมาโคร", 210)
+
+dropdown.MouseButton1Click:Connect(function()
+    for name,_ in pairs(Macro.Saved) do
+        selected = name
+        dropdown.Text = name
+        break
+    end
+end)
+
+-- =====================
+-- ⚡ AUTO SPEED
+-- =====================
+local speedPos = nil
+local autoSpeed = false
+
+local setSpeedBtn = makeBtn("ตั้งปุ่มสปีด", 250)
+local autoBtn = makeBtn("Auto Speed: OFF", 290)
+
+setSpeedBtn.MouseButton1Click:Connect(function()
+    speedPos = UIS:GetMouseLocation()
+    print("📍 ตั้งสปีดแล้ว")
+end)
+
+autoBtn.MouseButton1Click:Connect(function()
+    autoSpeed = not autoSpeed
+    autoBtn.Text = autoSpeed and "Auto Speed: ON" or "Auto Speed: OFF"
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+
+        if autoSpeed and speedPos then
+            VIM:SendMouseButtonEvent(speedPos.X, speedPos.Y, 0, true, game, 0)
+            VIM:SendMouseButtonEvent(speedPos.X, speedPos.Y, 0, false, game, 0)
+        end
+    end
+end)
+
+-- =====================
+-- 🎮 BUTTON
+-- =====================
+startBtn.MouseButton1Click:Connect(function()
+    Macro:Start()
+end)
+
+stopBtn.MouseButton1Click:Connect(function()
+    local name = nameBox.Text ~= "" and nameBox.Text or "มาโคร1"
+    Macro:Stop(name)
+end)
+
+playBtn.MouseButton1Click:Connect(function()
+    if selected then
+        Macro:Play(selected)
+    end
+end)
+
+-- =====================
+-- 📱 ปุ่มเปิด/ปิด UI
+-- =====================
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Size = UDim2.new(0, 100, 0, 40)
+toggleBtn.Position = UDim2.new(0, 20, 0, 60)
+toggleBtn.Text = "เปิด/ปิด UI"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    frame.Visible = not frame.Visible
+end)
